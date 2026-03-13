@@ -1,0 +1,81 @@
+<!--
+  DDR-opt on BARN: only global_planning + mpc_controller.
+  Use with BARN: odom from /odometry/filtered, pointcloud from bridge (LaserScan->PointCloud2),
+  cmd published to /ddr_cmd and bridged to /cmd_vel by barn_ddr_bridge.
+  No simulator, no global_map_node, no icrekf, no laser_simulator - BARN provides Gazebo + laser.
+-->
+<launch>
+  <arg name="if_fix_final_" value="false"/>
+  <arg name="start_x_" value="-2.25"/>
+  <arg name="start_y_" value="3.0"/>
+  <arg name="start_yaw_" value="1.57"/>
+  <arg name="final_x_" value="0.0"/>
+  <arg name="final_y_" value="0.0"/>
+  <arg name="final_yaw_" value="0.0"/>
+
+  <arg name="gridmap_interval_" value="0.1"/>
+  <!-- BARN: use Jackal odom; cmd published to /ddr_cmd for bridge to convert to Twist -->
+  <arg name="odom_topic" value="/odometry/filtered"/>
+  <arg name="traj_topic" value="/planner/traj_poly"/>
+  <arg name="cmd_topic" value="/ddr_cmd"/>
+
+  <arg name="velocity_suffix" value="3ms"/>
+  <arg name="if_perspective_" value="false"/>
+  <arg name="detection_range_" value="10.0"/>
+  <arg name="if_move_" value="true"/>
+  <arg name="hrz_limited_" value="false"/>
+  <arg name="hrz_laser_range_dgr_" value="90.0"/>
+  <arg name="ICR_yr_" value="-0.3"/>
+  <arg name="ICR_yl_" value="0.3"/>
+  <arg name="ICR_xv_" value="0.2"/>
+  <arg name="if_standard_diff_" value="true"/>
+
+  <node name="global_planning" pkg="plan_manager" type="global_planning" output="screen">
+    <rosparam file="$(find front_end)/config/jps$(arg velocity_suffix).yaml" command="load"/>
+    <rosparam file="$(find plan_manager)/config/car$(arg velocity_suffix).yaml" command="load"/>
+    <rosparam file="$(find back_end)/config/global_planning$(arg velocity_suffix).yaml" command="load"/>
+    <rosparam file="$(find plan_env)/config/mapsim.yaml" command="load"/>
+    <param name="start_x" value="$(arg start_x_)"/>
+    <param name="start_y" value="$(arg start_y_)"/>
+    <param name="start_yaw" value="$(arg start_yaw_)"/>
+    <param name="if_fix_final" value="$(arg if_fix_final_)"/>
+    <param name="final_x" value="$(arg final_x_)"/>
+    <param name="final_y" value="$(arg final_y_)"/>
+    <param name="final_yaw" value="$(arg final_yaw_)"/>
+    <param name="replan_time" value="0.5"/>
+    <param name="max_replan_time" value="0.05"/>
+
+    <param name="gridmap_interval" value="$(arg gridmap_interval_)"/>
+    <param name="path_gridmap_interval" value="0.05"/>
+    <param name="detection_range" value="$(arg detection_range_)"/>
+    <!-- BARN world extent (adjust if your world is larger) -->
+    <param name="global_x_lower" value="-30.0"/>
+    <param name="global_x_upper" value="30.0"/>
+    <param name="global_y_lower" value="-30.0"/>
+    <param name="global_y_upper" value="30.0"/>
+    <param name="if_perspective" value="$(arg if_perspective_)"/>
+    <param name="if_cirSupRaycast" value="true"/>
+
+    <remap from="~local_pointcloud" to="/laser_simulator/local_pointcloud"/>
+    <remap from="~odom" to="$(arg odom_topic)"/>
+    <remap from="~traj" to="$(arg traj_topic)"/>
+
+    <param name="hrz_limited" value="$(arg hrz_limited_)"/>
+    <param name="hrz_laser_range_dgr" value="$(arg hrz_laser_range_dgr_)"/>
+    <param name="ICR_yr" value="$(arg ICR_yr_)"/>
+    <param name="ICR_yl" value="$(arg ICR_yl_)"/>
+    <param name="ICR_xv" value="$(arg ICR_xv_)"/>
+    <param name="if_standard_diff" value="$(arg if_standard_diff_)"/>
+  </node>
+
+  <group if="$(arg if_move_)">
+    <node name="mpc" pkg="mpc_controller" type="mpc" output="screen">
+      <rosparam file="$(find mpc_controller)/config/mpc$(arg velocity_suffix).yaml" command="load"/>
+      <rosparam file="$(find plan_manager)/config/car$(arg velocity_suffix).yaml" command="load"/>
+      <param name="if_mpc" value="true"/>
+      <remap from="~cmd" to="$(arg cmd_topic)"/>
+      <remap from="~odom" to="$(arg odom_topic)"/>
+      <remap from="~traj" to="$(arg traj_topic)"/>
+    </node>
+  </group>
+</launch>

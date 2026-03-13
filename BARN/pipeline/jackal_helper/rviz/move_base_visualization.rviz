@@ -1,0 +1,55 @@
+<!-- move_base_visualization.rviz -->
+<rviz>
+  <Class>RViz</Class>
+  <VisualizationManager>
+    <FrameManager>
+      <FixedFrame>map</FixedFrame>
+    </FrameManager>
+    
+    <!-- 全局代价地图 -->
+    <Property>
+      <Property name="Global Map">
+        <Property name="Global Costmap" type="rviz/Map">
+          <Topic>/move_base/global_costmap/costmap</Topic>
+          <Alpha>0.7</Alpha>
+        </Property>
+      </Property>
+    </Property>
+    
+    <!-- 局部代价地图 -->
+    <Property>
+      <Property name="Local Map">
+        <Property name="Local Costmap" type="rviz/Map">
+          <Topic>/move_base/local_costmap/costmap</Topic>
+          <Alpha>0.7</Alpha>
+        </Property>
+      </Property>
+    </Property>
+    
+    <!-- 全局路径 -->
+    <Property>
+      <Property name="Global Plan" type="rviz/Path">
+        <Topic>/move_base/GlobalPlanner/plan</Topic>
+        <Color>0;255;0</Color>
+        <Alpha>1</Alpha>
+      </Property>
+    </Property>
+    
+    <!-- 局部路径 -->
+    <Property>
+      <Property name="Local Plan" type="rviz/Path">
+        <Topic>/move_base/DWAPlannerROS/local_plan</Topic>
+        <Color>255;0;0</Color>
+        <Alpha>1</Alpha>
+      </Property>
+    </Property>
+    
+    <!-- 当前目标点 -->
+    <Property>
+      <Property name="Goal" type="rviz/Pose">
+        <Topic>/move_base/current_goal</Topic>
+        <Color>255;255;0</Color>
+      </Property>
+    </Property>
+  </VisualizationManager>
+</rviz>

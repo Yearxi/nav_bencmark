@@ -1,0 +1,29 @@
+<!--
+  Run DDR-opt navigation stack on BARN benchmark.
+  Prerequisite: Build BARN workspace with DDR-opt packages (plan_manager, mpc_controller, front_end, back_end, plan_env, carstatemsgs) in the same workspace.
+  1) static tf odom -> world (DDR-opt SDF map uses "world" frame)
+  2) laser_to_pointcloud: /front/scan -> /laser_simulator/local_pointcloud
+  3) carstate_to_twist: /ddr_cmd (CarState) -> /cmd_vel (Twist)
+  4) DDR-opt planner_barn: global_planning + mpc, using BARN odom and bridge pointcloud
+-->
+<launch>
+  <arg name="gui" default="false"/>
+
+  <!-- DDR-opt SDF map expects "world" frame; BARN uses "odom". Publish identity tf odom -> world -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_world" args="0 0 0 0 0 0 odom world"/>
+
+  <!-- BARN laser -> PointCloud2 for DDR-opt -->
+  <node pkg="barn_ddr_bridge" type="laser_to_pointcloud.py" name="laser_to_pointcloud" output="screen">
+    <param name="scan_topic" value="/front/scan"/>
+    <param name="pointcloud_topic" value="/laser_simulator/local_pointcloud"/>
+  </node>
+
+  <!-- DDR-opt CarState -> Jackal Twist -->
+  <node pkg="barn_ddr_bridge" type="carstate_to_twist.py" name="carstate_to_twist" output="screen">
+    <param name="carstate_topic" value="/ddr_cmd"/>
+    <param name="twist_topic" value="/cmd_vel"/>
+  </node>
+
+  <!-- DDR-opt: global_planning + mpc (no simulator, no icrekf; uses BARN odom and bridge pointcloud) -->
+  <include file="$(find plan_manager)/launch/planner_barn.launch"/>
+</launch>

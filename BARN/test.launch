@@ -1,0 +1,117 @@
+git clone https://github.com/jackal/jackal.git --branch noetic-devel
+git clone https://github.com/jackal/jackal_simulator.git --branch noetic-devel
+git clone https://github.com/jackal/jackal_desktop.git --branch noetic-devel
+git clone https://github.com/utexas-bwi/eband_local_planner.git
+
+teleop：
+<launch>
+  <arg name="joy_dev" default="$(optenv JACKAL_JOY_DEVICE /dev/input/ps4)" />
+  <arg name="joystick" default="true" />
+
+  <group ns="bluetooth_teleop" if="$(arg joystick)">
+
+    <group unless="$(optenv JACKAL_PS3 0)" >
+      <rosparam command="load" file="$(find jackal_control)/config/teleop_ps4.yaml" />
+      <param name="joy_node/dev" value="$(arg joy_dev)" />
+    </group>
+
+    <group if="$(optenv JACKAL_PS3 0)" >
+      <rosparam command="load" file="$(find jackal_control)/config/teleop_ps3.yaml" />
+      <param name="joy_node/dev" value="$(arg joy_dev)" />
+    </group>
+
+    <node pkg="joy" type="joy_node" name="joy_node" />
+
+    <node pkg="teleop_twist_joy" type="teleop_node" name="teleop_twist_joy"/>
+  </group>
+
+  <node pkg="interactive_marker_twist_server" type="marker_server" name="twist_marker_server">
+    <param name="link_name" value="base_link" />
+  </node>
+</launch>
+
+control：
+<launch>
+
+  <arg name="enable_ekf" default="$(optenv ENABLE_EKF true)"/>
+
+  <rosparam command="load" file="$(find jackal_control)/config/control.yaml" />
+
+  <node name="controller_spawner" pkg="controller_manager" type="spawner"
+        args="jackal_joint_publisher jackal_velocity_controller" />
+
+  <group if="$(arg enable_ekf)" >
+    <node pkg="robot_localization" type="ekf_localization_node" name="ekf_localization">
+      <rosparam command="load" file="$(find jackal_control)/config/robot_localization.yaml" />
+    </node>
+
+    <group if="$(optenv JACKAL_IMU_MICROSTRAIN 0)">
+      <rosparam>
+        <!-- Optionally load the configuration for the Microstrain-family IMU -->
+        ekf_localization:
+          imu1: microstrain/imu/data
+          imu1_config: [false, false, false,
+                      true, true, false,
+                      false, false, false,
+                      true, true, true,
+                      false, false, false]
+          imu1_differential: false
+      </rosparam>
+      <param name="ekf_localization/imu1" value="$(optenv JACKAL_IMU_MICROSTRAIN_NAME microstrain)/imu/data"/>
+    </group>
+  </group>
+
+  <node pkg="twist_mux" type="twist_mux" name="twist_mux">
+    <rosparam command="load" file="$(find jackal_control)/config/twist_mux.yaml" />
+    <remap from="cmd_vel_out" to="jackal_velocity_controller/cmd_vel"/>
+  </node>
+
+  <group if="$(optenv JACKAL_CONTROL_EXTRAS 0)" >
+    <rosparam command="load" file="$(env JACKAL_CONTROL_EXTRAS_PATH)" subst_value="true" />
+  </group>
+
+</launch>
+
+description:
+<launch>
+  <arg name="config" default="base" />
+  <!-- fix for oneweek project -->
+  <arg name="env_runner" value="$(eval 'env_run' if not optenv('OS', 'unknown').lower().startswith('windows') else 'env_run.bat')" />
+  <!-- the following seems to work too when in devel space, but not in install_isolated -->
+  <!-- <arg name="env_runner" value="env_run" /> -->
+
+  <param name="robot_description"
+         command="$(find jackal_description)/scripts/$(arg env_runner)
+                    $(find jackal_description)/urdf/configs/$(arg config)
+                    $(find xacro)/xacro $(find jackal_description)/urdf/jackal.urdf.xacro
+                    --inorder" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+</launch>
+
+
+run:
+雷达环境变量
+启动gazebo：
+启动导航栈
+发送目标指令
+
+jackal节点：
+模型加载
+控制管理栈
+tf发布
+ekf里程计
+遥控输入相关（控制指令管理）
+
+接口
+
+机器人配置：
+基本配置
+雷达
+
+
+move_base接口
+目标（动作）
+无map
+odometry/filtered :: nav_msgs/Odometry
+front/scan :: sensor_msgs/LaserScan
+cmd_vel :: geometry_msgs/Twist
