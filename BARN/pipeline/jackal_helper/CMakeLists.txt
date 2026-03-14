@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(jackal_helper)
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-## Compile as C++11, supported in ROS Kinetic and newer
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+## C++17 required for Gazebo 11 / Ignition Math 6 / sdformat 9 (e.g. std::optional, std::chrono_literals)
 # add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
@@ -142,6 +142,7 @@ link_directories(${GAZEBO_LIBRARY_DIRS})
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(collision_publisher_node src/collision_publisher.cpp)
+target_compile_options(collision_publisher_node PRIVATE -std=c++17)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the

@@ -4,6 +4,29 @@
 
 ---
 
+## 零、重要说明：在哪里执行这些命令
+
+**本文档中所有命令均为 Linux（Ubuntu）命令，必须在 Ubuntu 环境下执行。**
+
+- **不能在 Windows 的 PowerShell 或 CMD 里直接运行**：`sudo`、`apt`、`bash`、`source` 等在此环境下不存在或行为不同，会报错（例如“已在此计算机上禁用 Sudo”）。
+- **正确做法任选其一**：
+  1. **在云服务器上执行**：买一台/租一台 **Ubuntu 20.04 或 18.04** 的云主机，用 **SSH 登录**到该服务器，在 SSH 终端里按下面步骤操作（推荐）。
+  2. **在 Windows 本机用 WSL2**：在 Windows 上安装 [WSL2](https://docs.microsoft.com/zh-cn/windows/wsl/install)，并安装 Ubuntu 发行版，在 “Ubuntu” 终端里执行下面所有命令（相当于在本机有一台 Ubuntu）。
+
+**若你当前是 Windows + PowerShell**：请先通过 SSH 连接到一台 Ubuntu 云服务器，或在 Windows 中安装并打开 WSL2 的 Ubuntu，再在 **Ubuntu 的 bash 终端**中执行下文步骤。
+
+### 在 Windows 本机时的两种用法
+
+| 方式 | 说明 | 执行命令的位置 |
+|------|------|----------------|
+| **云服务器** | 租用/购买 Ubuntu 20.04 或 18.04 云主机，用 SSH 登录 | 在 SSH 终端（如 `ssh user@服务器IP` 后的终端）里执行下文所有 `bash` 命令 |
+| **WSL2** | 在 Windows 安装 WSL2，并安装 Ubuntu 发行版 | 打开「Ubuntu」应用，在出现的 Linux 终端里执行下文所有命令 |
+
+- **云服务器**：本机只保留代码、用 Git 或 scp 同步到服务器即可；所有 `sudo apt`、`catkin_make`、`python3 run.py` 都在服务器上执行。
+- **WSL2**：在「Ubuntu」里安装 ROS、编译、运行；项目目录可放在 WSL 文件系统（如 `~/jackal_ws`）或通过 `/mnt/c/...` 访问 Windows 盘符。
+
+---
+
 ## 一、服务器系统要求
 
 ### 1. 操作系统
@@ -108,8 +131,8 @@ Melodic 将上面命令中的 `noetic` 改为 `melodic` 即可。
 ```bash
 # 安装 OSQP
 cd /tmp
-wget https://github.com/osqp/osqp/releases/download/v0.6.3/osqp-v0.6.3.tar.gz
-tar -xzf osqp-v0.6.3.tar.gz && cd osqp-v0.6.3
+wget https://github.com/osqp/osqp/releases/download/v0.6.3/osqp-v0.6.3-src.tar.gz -O osqp-v0.6.3-src.tar.gz
+tar -xzf osqp-v0.6.3-src.tar.gz && cd osqp-v0.6.3
 mkdir build && cd build
 cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=/usr/local ..
 make -j$(nproc)
@@ -173,9 +196,14 @@ ln -s /path/to/isaaclab/benchmark/BARN/pipeline/barn_ddr_bridge .
 
 ### 步骤 6：安装 rosdep 依赖并编译
 
+**使用 DDR-opt 时**：先确保 OSQP、OSQP-Eigen 已按步骤 3 安装到 `/usr/local`，编译前让 CMake 能找到它们：
+
 ```bash
 cd ~/jackal_ws
 source /opt/ros/${ROS_DISTRO}/setup.bash
+
+# 让 catkin_make 能找到 /usr/local 下安装的 OsqpEigen（避免 find_package(OsqpEigen) 报错）
+export CMAKE_PREFIX_PATH="/opt/ros/${ROS_DISTRO}:${CMAKE_PREFIX_PATH}:/usr/local"
 
 # 若未初始化过 rosdep（仅第一次）
 sudo rosdep init
@@ -187,7 +215,7 @@ catkin_make
 source devel/setup.bash
 ```
 
-若编译报错，可尝试将 `jackal_helper/CMakeLists.txt` 中 `-std=c++11` 改为 `-std=c++17` 再 `catkin_make`。
+若系统为 **Gazebo 11 / Ubuntu 20.04+**，需将 `jackal_helper/CMakeLists.txt` 中 `-std=c++11` 改为 `-std=c++17`（Gazebo 11 依赖的 Ignition/sdformat 头文件需要 C++17），否则 `collision_publisher_node` 会报 `std::optional`、`chrono_literals` 等错误。
 
 ### 步骤 7：无头运行测试（不打开 Gazebo 界面）
 
@@ -242,10 +270,44 @@ python3 report_test.py --out_path res/ddr_opt_out.txt
 - 检查网络与软件源；可临时换国内 ROS 镜像再 `rosdep update`。
 - 若某个包找不到，可手动 `apt install ros-${ROS_DISTRO}-<包名>`。
 
-### 3. DDR-opt 编译找不到 OSQP / OSQP-Eigen
+### 3. DDR-opt 编译报错：`Could not find a package configuration file provided by "OsqpEigen"`
 
-- 确认 OSQP、OSQP-Eigen 已安装到 `/usr/local`，并重新 `source /usr/local` 或确保 CMake 能找到它们。
-- 若用非默认路径，需在 DDR-opt 的 CMake 中指定 `OSQP_DIR`、`osqp-eigen` 路径。
+**原因**：未安装 OSQP/OSQP-Eigen，或 CMake 未从 `/usr/local` 查找，导致 `find_package(OsqpEigen)` 失败。
+
+**解决：**
+
+1. **若尚未安装**，在服务器上执行步骤 3（安装 OSQP 与 OSQP-Eigen），例如：
+
+```bash
+# OSQP
+cd /tmp
+wget https://github.com/osqp/osqp/releases/download/v0.6.3/osqp-v0.6.3-src.tar.gz -O osqp-v0.6.3-src.tar.gz
+tar -xzf osqp-v0.6.3-src.tar.gz && cd osqp-v0.6.3
+mkdir build && cd build
+cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=/usr/local ..
+make -j$(nproc)
+sudo make install
+cd /tmp
+
+# OSQP-Eigen（注意：安装后 CMake 会在 /usr/local/lib/cmake/OsqpEigen/ 生成 OsqpEigenConfig.cmake）
+wget https://github.com/robotology/osqp-eigen/archive/refs/tags/v0.8.1.tar.gz -O osqp-eigen-0.8.1.tar.gz
+tar -xzf osqp-eigen-0.8.1.tar.gz && cd osqp-eigen-0.8.1
+mkdir build && cd build
+cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr/local ..
+make -j$(nproc)
+sudo make install
+```
+
+2. **编译工作空间时**让 CMake 能找到 `/usr/local`，再执行 `catkin_make`：
+
+```bash
+cd /root/gpufree-data/jackal_ws   # 或你的工作空间路径
+source /opt/ros/noetic/setup.bash
+export CMAKE_PREFIX_PATH="/opt/ros/noetic:${CMAKE_PREFIX_PATH}:/usr/local"
+catkin_make
+```
+
+若 OSQP-Eigen 安装在其他前缀（如 `$HOME/.local`），则把该前缀加入 `CMAKE_PREFIX_PATH`，或设置 `OsqpEigen_DIR` 为包含 `OsqpEigenConfig.cmake` 的目录。
 
 ### 4. 找不到 `barn_ddr_bridge` 或 `plan_manager`
 
@@ -256,6 +318,13 @@ python3 report_test.py --out_path res/ddr_opt_out.txt
 
 - 关闭其他占用内存的服务；或换更大内存实例。
 - 先只跑单个 world 确认流程，再考虑批量。
+
+### 6. 在 Windows 上提示“已禁用 Sudo”或“找不到 apt”
+
+- 说明当前是在 **Windows**（PowerShell/CMD）下执行了 Linux 命令，这些命令只能在 **Linux（Ubuntu）** 下运行。
+- 请改用 **Ubuntu 环境**再执行文档中的步骤：
+  - **方式 A**：用 SSH 登录到一台 **Ubuntu 云服务器**，在 SSH 终端里执行。
+  - **方式 B**：在 Windows 上安装 **WSL2 + Ubuntu**，打开 “Ubuntu” 应用进入 bash，在 bash 里执行（不要用 PowerShell）。
 
 ---
 
